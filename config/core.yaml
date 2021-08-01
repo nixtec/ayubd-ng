@@ -1,0 +1,5 @@
+# config/core.yaml
+# -1 for values will cause to set maximum allowed resource (detect and use limit)
+core:
+- nofile  : 1024
+- nocpu   : 8

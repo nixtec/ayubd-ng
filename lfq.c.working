@@ -1,0 +1,129 @@
+/*
+ * lfq.c
+ * lock-free queue
+ * safe for one producer, one consumer
+ * Idea from Dr. Dobb's Journal
+ * One thread can write and another read -- at the same time! http://www.drdobbs.com/parallel/lock-free-queues/208801974
+ * Writing Lock-Free Code: A Corrected Queue: http://www.drdobbs.com/parallel/writing-lock-free-code-a-corrected-queue/210604448
+ * no locking is used, the environment/system will ensure that one producer and one consumer are using the same queue at a time
+ */
+#include "lfq.h"
+#include <stdio.h>
+#include <stdlib.h>
+//#include <stdint.h>
+#include <unistd.h>
+#include <assert.h>
+
+
+struct node *lfq_node_new(void *value)
+{
+  struct node *node = NODE(1);
+  VAL(node) = value;
+  NEXT(node) = PREV(node) = NULL;
+
+  return node;
+}
+
+void lfq_node_delete(struct node *node)
+{
+  DO_FREE(node);
+}
+
+struct lfq *lfq_new(enum LFQ_TYPE qtype)
+{
+  struct lfq *q = DO_MALLOC(sizeof(struct lfq));
+  assert(q != NULL);
+  struct node *node = lfq_node_new(NULL);
+  assert(node != NULL);
+
+  q->qtype = qtype;
+  QHEAD(q) = QDIV(q) = QTAIL(q) = node;
+
+  return q;
+}
+
+/*
+ * destroy the queue
+ */
+void lfq_delete(struct lfq *q)
+{
+  struct node *tmp = NULL;
+  while (QHEAD(q) != NULL) {
+    tmp = QHEAD(q);
+    QHEAD(q) = NEXT(tmp);
+    DO_FREE(tmp);
+  }
+
+  DO_FREE(q);
+}
+
+
+void lfq_in(struct lfq *q, void *value)
+{
+  struct node *tmp = NULL, *tmp1 = NULL;
+  NEXT(QTAIL(q)) = lfq_node_new(value);
+  PREV(NEXT(QTAIL(q))) = QTAIL(q); /* value always is next 'next' pointer */
+  QTAIL(q) = NEXT(QTAIL(q)); /* publish it */
+
+  /* trim unused nodes, let's choose the direction of trimming */
+  if (q->qtype == LFQ_QUEUE) {
+    tmp1 = QHEAD(q);
+  } else {
+    tmp1 = QTAIL(q);
+  }
+  while (tmp1 != QDIV(q)) { /* trim unused nodes */
+    tmp = tmp1;
+    if (q->qtype == LFQ_QUEUE) {
+      tmp1 = NEXT(tmp1);
+    } else {
+      tmp1 = PREV(tmp1);
+    }
+    DO_FREE(tmp);
+  }
+  if (q->qtype == LFQ_QUEUE) {
+    QHEAD(q) = tmp1;
+  } else {
+    QTAIL(q) = tmp1;
+  }
+}
+
+
+/*
+ * dequeue doesn't remove the node from Q
+ * it just advances the divider
+ */
+void *lfq_out(struct lfq *q)
+{
+  void *result = NULL;
+  struct node *tmp = NULL;
+
+  if (q->qtype == LFQ_QUEUE) {
+    tmp = QTAIL(q);
+  } else {
+    tmp = QHEAD(q);
+  }
+  if (QDIV(q) != tmp) {
+    result = VAL(NEXT(QDIV(q)));
+    if (q->qtype == LFQ_QUEUE) {
+      QDIV(q) = NEXT(QDIV(q));
+    } else {
+      QDIV(q) = PREV(QDIV(q));
+    }
+    return result;
+  }
+  return NULL;
+}
+
+int lfq_is_empty(struct lfq *q)
+{
+  struct node *tmp = NULL;
+
+  if (q->qtype == LFQ_QUEUE) {
+    tmp = QTAIL(q);
+  } else {
+    tmp = QHEAD(q);
+  }
+
+  return (q->divider == tmp);
+}
+

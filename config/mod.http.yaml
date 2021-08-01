@@ -1,0 +1,8 @@
+ipv4    : 0.0.0.0
+ipv6    : ::1
+port    : 9990
+# transparently multiplex connections from addr, addr6, unix
+unix    : /tmp/svc-ng.sock
+# need  : xxx
+# by default provide is the module name
+# provide       : http

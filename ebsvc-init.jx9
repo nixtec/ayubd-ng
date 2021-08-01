@@ -1,0 +1,9 @@
+/*
+ * create the collection 'users'
+ */
+ $exam = 'ssc';
+ $year = '2018';
+ $db_prefix = 'result_';
+ $db_name = $db_prefix 
+
+ if (!db_exists('result'))
